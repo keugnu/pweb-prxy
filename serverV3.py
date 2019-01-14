@@ -5,6 +5,7 @@ import os
 import re
 
 from argparse import ArgumentParser
+from time import time
 from socket import *
 
 
@@ -12,6 +13,15 @@ def getargs():
 	parser = ArgumentParser(description='A caching web proxy written in python.')
 	parser.add_argument('ipaddr', help='IP adrress of the proxy server')
 	return parser.parse_args()
+
+
+def is_old(filename):
+	with open(filename, 'rb') as fh:
+		stats = os.stat(fh)
+	if time() - stats.st_ctime > 3600:
+		return True
+	else:
+		return False
 
 
 def main():
@@ -32,16 +42,20 @@ def main():
 		filename = message.decode().split()[1].partition("/")[2]
 
 		try:
-			with open(filename[1:-1], "r") as fh:
-				output = fh.readlines()
-			clsock.send("HTTP/1.0 200 OK\r\n".encode())
-			clsock.send("Content-Type:text/html\r\n".encode())
-			for data in output:
-				clsock.send(data.encode())
-			print("Served cached version")
-			continue
+			if not is_old(filename):
+				with open(filename[1:-1], "r") as fh:
+					output = fh.readlines()
+				clsock.send("HTTP/1.0 200 OK\r\n".encode())
+				clsock.send("Content-Type:text/html\r\n".encode())
+				for data in output:
+					clsock.send(data.encode())
+				print("Served cached version")
+				continue
+			else:
+				os.remove(filename)
 		except IOError:
 			print("Cache file does not exist")
+
 		c = socket(AF_INET, SOCK_STREAM)
 		hostn = filename.replace("www.", "", 1)[1:-1]
 		print(f"Attepting connection to: {hostn}")
